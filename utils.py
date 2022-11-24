@@ -31,12 +31,36 @@ def get_data():
     # read validation data and remap indexes
     validation = pd.read_csv(VALIDATION_PATH)
     validation = transform_data_to_internal_indexes(validation, user_map, item_map)
+    # drop duplicate ratings (different ratings from same user and item)
+    train = train.drop_duplicates(subset=[USER_COL, ITEM_COL])
+    validation = validation.drop_duplicates(subset=[USER_COL, ITEM_COL])
     # convert to numpy arrays
     train = train.values.astype(int)
     validation = validation.values.astype(int)
     # remove rows with negative values from validation = users or items that don't exist in train set
     validation = validation[validation.min(axis=1)>=0,:]
     return train, validation
+
+def user_item_dic_preprocess(data: np.array) -> dict:
+    """
+    Create dictionary with user as key and set of items as value.
+    Args:
+        data: numpy array of shape (n,3) where n is the number of ratings.
+    Returns:
+        dictionary with user as key and set of items as value.
+    """
+    items_of_user = {}
+    users_of_item = {}
+    for user, item, rating in data:
+        if user not in items_of_user:
+            items_of_user[user] = []
+        if item not in users_of_item:
+            users_of_item[item] = []
+        # update dictionaries
+        items_of_user[user].append((item, rating))
+        users_of_item[item].append((user, rating))
+    return items_of_user, users_of_item
+
 
 class Config:
     def __init__(self, **kwargs):
