@@ -6,11 +6,18 @@ from utils import Config,get_data, user_item_dic_preprocess
 from mf_sgd import Matrix_Factorization_SGD
 
 class Matrix_Factorization_ALS(Matrix_Factorization_SGD):
+    """
+    Class for matrix factorization using alternating least squares
+    """
     def __init__(self, config):
         super().__init__(config)
         self.item_users_dic = config.item_users_dic
-
+    
+    # we are only updating run epoch method, so we can use the rest of the code from mf_sgd.py (fit method, predict_on_pair method, etc.)
     def run_epoch(self): 
+        """
+        Runs one epoch of the model, optimzing the user and item vectors.
+        """
         # optimize user vectors
         for user in tqdm(self.user_items_dic.keys(), desc=f"Updating user vectors"):
             user_items = self.user_items_dic[user]
@@ -29,6 +36,7 @@ class Matrix_Factorization_ALS(Matrix_Factorization_SGD):
         self.u[:,user] = np.linalg.inv(item_mtx).dot(residual_vector)
         self.user_bias[user] = user_bias_residual / (len(user_items) + self.gamma['user_bias'])
 
+        # optimize item vectors
         for item in tqdm(self.item_users_dic, desc=f"Updating item vectors"):
             item_users = self.item_users_dic[item]
             user_mtx = np.zeros((self.vec_dim, self.vec_dim))
