@@ -3,12 +3,28 @@ import numpy as np
 from config import *
 
 def transform_data_to_internal_indexes(data: pd.DataFrame, user_map, item_map) -> pd.DataFrame:
+    """
+    Transforms the data to internal indexes, i.e. the indexes that are used in the code [0,num users/items].
+    Args:
+        data: pandas dataframe with columns [user,item,rating]
+        user_map: dictionary that maps user id to internal index
+        item_map: dictionary that maps item id to internal index
+    Returns:
+        pandas dataframe with columns [user,item,rating] where the user and item columns are in internal indexes.
+    """
     data[USER_COL] = data[USER_COL_NAME_IN_DATAEST].map(user_map)
     data[ITEM_COL] = data[ITEM_COL_NAME_IN_DATASET].map(item_map)
     data[RATING_COL] = data[RATING_COL_NAME_IN_DATASET]
     return data[[USER_COL,ITEM_COL, RATING_COL]]
 
 def get_user_and_item_map(data: pd.DataFrame):
+    """
+    Creates a mapping from user/item id to internal index.
+    Args:
+        data: pandas dataframe with columns [user,item,rating]
+    Returns:
+        user_map: dictionary that maps user id to internal index
+    """
     data[USER_COL] = pd.factorize(data[USER_COL_NAME_IN_DATAEST])[0]
     data[ITEM_COL] = pd.factorize(data[ITEM_COL_NAME_IN_DATASET])[0]
     user_map = data[[USER_COL, USER_COL_NAME_IN_DATAEST]].drop_duplicates()
@@ -21,8 +37,8 @@ def get_data():
     """
     reads train, validation to python indices so we don't need to deal with it in each algorithm.
     of course, we 'learn' the indices (a mapping from the old indices to the new ones) only on the train set.
-    if in the validation set there is an index that does not appear in the train set then we can put np.nan or
-     other indicator that tells us that.
+    
+    If an index does not appear in the train set but appears in the validation set, then we can put np.nan or another indicator that tells us that.
     """
     # read train data and remap indexes 
     train = pd.read_csv(TRAIN_PATH)
