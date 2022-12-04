@@ -63,7 +63,7 @@ if __name__ == '__main__':
                 'user': 0.001,
                 'item': 0.001
             },
-        vec_dim=50,
+        vec_dim=64,
         epochs=20, 
         user_items_dic=user_items_dic,
         lr=0.001,

@@ -3,8 +3,10 @@ import numpy as np
 import time
 from tqdm import tqdm
 from utils import Config, get_data, user_item_dic_preprocess
+from simple_model import SimpleModel
 
-class Matrix_Factorization_SGD():
+
+class Matrix_Factorization_SGD(SimpleModel):
     """
     Class for matrix factorization using SGD
     """
@@ -24,46 +26,6 @@ class Matrix_Factorization_SGD():
         self.mu = None
         self.u = None
         self.v = None
-
-    def calculate_mpr(self)->float:
-        """
-        Calculates the mean percentage rank of the model
-        Returns: The mean percentage rank score of the model
-        """
-        for user in self.user_items_dic:
-            num_of_ranked_items = len(self.user_items_dic[user])
-            ratings = [x[1] for x in self.user_items_dic[user]]
-            sorted_ratings = sorted(ratings, reverse=True)
-            mpr=0
-            for i in range(num_of_ranked_items):
-                weight=i+1/num_of_ranked_items
-                mpr += weight*sorted_ratings[i]
-            mpr = mpr/sum(ratings)
-            return mpr
-
-    def calculate_evaluation_measures(self, data: np.array)->dict:
-        """
-        Calculates the evaluation measures for the model
-        Args:
-            data: The data to calculate the evaluation measures on
-        Returns:
-            A dictionary with the evaluation measures
-        """
-        ssr = 0
-        mae = 0
-        for row in tqdm(data,desc=f"Calculating evaluation measures"):
-            user, item, rating = row
-            pred_y = self.predict_on_pair(user, item)
-            mae+= abs(rating-pred_y)
-            ssr += (rating - pred_y) ** 2
-            sst= (rating - self.mu) ** 2
-        r_squared = 1 - (ssr / sst)
-        mse=ssr/data.shape[0]
-        rmse=np.sqrt(mse)
-        mae = mae/data.shape[0]
-        mpr=self.calculate_mpr()
-        measures={'mae':mae, 'rmse':rmse, 'r_squared':r_squared, 'mpr':mpr}
-        return measures
 
     def calc_regularization(self): #TODO: Check if this is necessary
         return  self.gamma['item_bias'] * np.sum(self.item_bias ** 2) + \
@@ -134,7 +96,6 @@ class Matrix_Factorization_SGD():
             # updating the latent factors to the opposite direction of the gradient- SGD
             self.u[:, user] += self.lr * (residual * self.v[:, item] - self.gamma['user'] * self.u[:, user])
             self.v[:, item] += self.lr * (residual * self.u[:, user] - self.gamma['item'] * self.v[:, item])
-            
 
     def predict_on_pair(self, user: int, item: int) -> float:
         """
@@ -148,6 +109,7 @@ class Matrix_Factorization_SGD():
         vec_prob = np.dot(self.v[:, item], self.u[:, user])
         return self.mu + self.user_bias[user] + self.item_bias[item] + vec_prob
 
+
 if __name__ == '__main__':
     train, validation = get_data()
     user_items_dic, item_users_dic = user_item_dic_preprocess(train)
@@ -160,8 +122,8 @@ if __name__ == '__main__':
                 'user': 0.001,
                 'item': 0.001
             },
-        vec_dim=50,
+        vec_dim=64,
         epochs=20)
     np.random.seed(42)
     model = Matrix_Factorization_SGD(config)
-    model.fit(train, validation, save_path='mf_sgd.pkl')
+    model.fit(train, validation, save_path='results/mf_sgd.pkl')
