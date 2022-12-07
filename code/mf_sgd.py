@@ -76,7 +76,7 @@ class Matrix_Factorization_SGD(SimpleModel):
                     break
 
         res_df = pd.DataFrame(res_list)
-        res_df.to_pickle(save_path)
+        # res_df.to_pickle(save_path)
         end = time.time()
 
         print(f"Fitting MF model done in {round(end - start,2)} seconds")
@@ -107,7 +107,8 @@ class Matrix_Factorization_SGD(SimpleModel):
             The predicted rating
         """
         vec_prob = np.dot(self.v[:, item], self.u[:, user])
-        return self.mu + self.user_bias[user] + self.item_bias[item] + vec_prob
+        pred = self.mu + self.user_bias[user] + self.item_bias[item] + vec_prob
+        return np.clip(pred, 0, 5)
 
 
 if __name__ == '__main__':

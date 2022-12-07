@@ -1,4 +1,5 @@
 data/
 .idea/
+.vscode/
 *.pyc
 *.code-workspace

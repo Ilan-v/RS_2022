@@ -13,16 +13,30 @@ class SimpleModel:
         Calculates the mean percentage rank of the model
         Returns: The mean percentage rank score of the model
         """
-        for user in self.user_items_dic:
+        for user in self.user_items_dic: 
+            user_avg_rating = np.mean([item[1] for item in self.user_items_dic[user]])
             num_of_ranked_items = len(self.user_items_dic[user])
-            ratings = [x[1] for x in self.user_items_dic[user]]
-            sorted_ratings = sorted(ratings, reverse=True)
-            mpr=0
-            for i in range(num_of_ranked_items):
-                weight=i+1/num_of_ranked_items
-                mpr += weight*sorted_ratings[i]
-            mpr = mpr/sum(ratings)
-            return mpr
+            ground_truth_list = self.user_items_dic[user]
+            ground_truth_dic= {}
+            model_ratings_lst = []
+            for item in ground_truth_list:
+                item_rating = item[1]
+                # convert to binary
+                ground_truth_dic[item] = 0 if item_rating < user_avg_rating else 1
+                # create list of model ratings for ranking
+                model_ratings_lst.append((item, self.predict_on_pair(user, item[0])))
+
+            sorted_ratings = sorted(model_ratings_lst, reverse=True)
+            mpr = 0
+            for i, item in enumerate(sorted_ratings):
+                item_id = item[0]
+                # item_ground_truth is 0 or 1
+                item_ground_truth = ground_truth_dic[item_id]
+                mpr += ((i+1)/num_of_ranked_items) * item_ground_truth
+            mpr += mpr/sum(ground_truth_dic.values())
+        
+        mpr = mpr/len(self.user_items_dic)
+        return mpr
 
     def calculate_evaluation_measures(self, data: np.array)->dict:
         """
@@ -34,13 +48,14 @@ class SimpleModel:
         """
         ssr = 0
         mae = 0
+        sst = 0
         for row in tqdm(data,desc=f"Calculating evaluation measures"):
             user, item, rating = row
             pred_y = self.predict_on_pair(user, item)
-            mae+= abs(rating-pred_y)
+            mae += abs(rating-pred_y)
             ssr += (rating - pred_y) ** 2
-            sst= (rating - self.mu) ** 2
-        r_squared = 1 - (ssr / sst)
+            sst += (rating - self.mu) ** 2
+        r_squared = 1 - (float(ssr) / float(sst))
         mse=ssr/data.shape[0]
         rmse=np.sqrt(mse)
         mae = mae/data.shape[0]
