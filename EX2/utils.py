@@ -14,7 +14,7 @@ def create_user_items_dict(df: pd.DataFrame) -> dict:
 def sample_negative_examples_randomly(user_items_dict:dict, items_list:list)->list:
     negative_samples={}
     for user in tqdm(user_items_dict):
-        relevant_samples = [x for x in items_list if x not in user_items_dict[user]]
+        relevant_samples = [x for x in items_list if x not in set(user_items_dict[user])]
         number_of_samples = min(len(relevant_samples), len(user_items_dict[user]))
         negative_samples[user] = list(np.random.choice(relevant_samples, number_of_samples, replace=False))
     return negative_samples
