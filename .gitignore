@@ -1,5 +1,6 @@
-data/
-.idea/
-.vscode/
+EX1/data/
+EX1/.idea/
+EX1/.vscode/
 *.pyc
 *.code-workspace
+EX2/data/
