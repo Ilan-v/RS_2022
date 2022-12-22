@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import time
 from tqdm import tqdm
-from utils import Config,get_data, user_item_dic_preprocess
+from utils import Config,get_data, user_item_dic_preprocess, TEST_PATH, TEST_RESULTS_PATH_ALS
 from mf_sgd import Matrix_Factorization_SGD
 
 class Matrix_Factorization_ALS(Matrix_Factorization_SGD):
@@ -54,7 +54,7 @@ class Matrix_Factorization_ALS(Matrix_Factorization_SGD):
             self.item_bias[item] = item_bias_residual / (len(item_users) + self.gamma['item_bias'])
 
 if __name__ == '__main__':
-    train, validation = get_data()
+    train, validation, test = get_data()
     user_items_dic, item_users_dic = user_item_dic_preprocess(train)
     config = Config(
         early_stop_crtiria=0.001,
@@ -71,3 +71,16 @@ if __name__ == '__main__':
     np.random.seed(10)
     model = Matrix_Factorization_ALS(config)
     model.fit(train, validation, 'results/mf_als.pkl')
+    # Save test results
+    res_list = []
+    for row in test:
+        if np.any(row < 0):
+            res_list.append(model.mu)
+        else:    
+            res_list.append(model.predict_on_pair(row[0], row[1]))
+    # load the test indexes
+    test = pd.read_csv(TEST_PATH)
+    # create a dataframe with the results
+    test['rating'] = res_list
+    # save the results
+    test.to_csv(TEST_RESULTS_PATH_ALS, index=False)

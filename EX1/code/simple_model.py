@@ -82,7 +82,7 @@ class SimpleModel:
         return self.mu
 
 if __name__ == '__main__':
-    train, validation = get_data()
+    train, validation, test = get_data()
     user_items_dic, item_users_dic = user_item_dic_preprocess(train)
     model = SimpleModel(user_items_dic)
     model.fit(train)

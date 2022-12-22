@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import time
 from tqdm import tqdm
-from utils import Config, get_data, user_item_dic_preprocess
+from utils import Config, get_data, user_item_dic_preprocess, TEST_PATH, TEST_RESULTS_PATH_SGD
 from simple_model import SimpleModel
 
 
@@ -60,6 +60,9 @@ class Matrix_Factorization_SGD(SimpleModel):
         # Calculating the RMSE for each epoch using SGD
         for epoch in range(self.epochs):
             self.epoch = epoch
+            # save previous parameters for early stopping
+            best_v = self.v
+            best_u = self.u
             self.run_epoch()
             # calculate evaluation measures on train and validation data
             train_measures = self.calculate_evaluation_measures(X_train)
@@ -73,10 +76,12 @@ class Matrix_Factorization_SGD(SimpleModel):
             if epoch > 0:
                 if rmse_list[-2] - rmse_list[-1] < self.early_stop_crtiria:
                     print(f"Early stopping at epoch {epoch}")
+                    self.v = best_v
+                    self.u = best_u
                     break
 
         res_df = pd.DataFrame(res_list)
-        # res_df.to_pickle(save_path)
+        res_df.to_pickle(save_path)
         end = time.time()
 
         print(f"Fitting MF model done in {round(end - start,2)} seconds")
@@ -112,7 +117,7 @@ class Matrix_Factorization_SGD(SimpleModel):
 
 
 if __name__ == '__main__':
-    train, validation = get_data()
+    train, validation, test = get_data()
     user_items_dic, item_users_dic = user_item_dic_preprocess(train)
     config = Config(
         user_items_dic=user_items_dic,
@@ -128,3 +133,16 @@ if __name__ == '__main__':
     np.random.seed(42)
     model = Matrix_Factorization_SGD(config)
     model.fit(train, validation, save_path='results/mf_sgd.pkl')
+    # Save test results
+    res_list = []
+    for row in test:
+        if np.any(row < 0):
+            res_list.append(model.mu)
+        else:
+            res_list.append(model.predict_on_pair(row[0], row[1]))
+    # load the test indexes
+    test = pd.read_csv(TEST_PATH)
+    # create a dataframe with the results
+    test['rating'] = res_list
+    # save the results
+    test.to_csv(TEST_RESULTS_PATH_SGD, index=False)

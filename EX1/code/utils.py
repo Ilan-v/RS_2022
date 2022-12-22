@@ -3,6 +3,9 @@ import numpy as np
 
 TRAIN_PATH = "data/Train.csv"
 VALIDATION_PATH = "data/Validation.csv"
+TEST_PATH = "data/Test_wo_labels.csv"
+TEST_RESULTS_PATH_SGD = "data/Test_SGD.csv"
+TEST_RESULTS_PATH_ALS = "data/Test_ALS.csv"
 
 USER_COL_NAME_IN_DATAEST = 'User_ID_Alias'
 ITEM_COL_NAME_IN_DATASET = 'Movie_ID_Alias'
@@ -23,20 +26,24 @@ USER_CORRELATION_PARAMS_FILE_PATH = 'learned_paramaters/user_correlation_params.
 ITEM_CORRELATION_PARAMS_FILE_PATH = 'learned_paramaters/item_correlation_params.pickle'
 CSV_COLUMN_NAMES = ['item_1', 'item_2', 'sim']
 
-def transform_data_to_internal_indexes(data: pd.DataFrame, user_map, item_map) -> pd.DataFrame:
+def transform_data_to_internal_indexes(data: pd.DataFrame, user_map, item_map, test = False) -> pd.DataFrame:
     """
     Transforms the data to internal indexes, i.e. the indexes that are used in the code [0,num users/items].
     Args:
         data: pandas dataframe with columns [user,item,rating]
         user_map: dictionary that maps user id to internal index
         item_map: dictionary that maps item id to internal index
+        test: boolean that indicates if the data is test data
     Returns:
         pandas dataframe with columns [user,item,rating] where the user and item columns are in internal indexes.
     """
     data[USER_COL] = data[USER_COL_NAME_IN_DATAEST].map(user_map)
     data[ITEM_COL] = data[ITEM_COL_NAME_IN_DATASET].map(item_map)
-    data[RATING_COL] = data[RATING_COL_NAME_IN_DATASET]
-    return data[[USER_COL,ITEM_COL, RATING_COL]]
+    if test:
+        return data[[USER_COL,ITEM_COL]]
+    else:
+        data[RATING_COL] = data[RATING_COL_NAME_IN_DATASET]
+        return data[[USER_COL,ITEM_COL, RATING_COL]]
 
 def get_user_and_item_map(data: pd.DataFrame):
     """
@@ -68,15 +75,20 @@ def get_data():
     # read validation data and remap indexes
     validation = pd.read_csv(VALIDATION_PATH)
     validation = transform_data_to_internal_indexes(validation, user_map, item_map)
+    #reads test data and remap indexes
+    test = pd.read_csv(TEST_PATH)
+    test = transform_data_to_internal_indexes(test, user_map, item_map, test=True)
     # drop duplicate ratings (different ratings from same user and item)
     train = train.drop_duplicates(subset=[USER_COL, ITEM_COL])
     validation = validation.drop_duplicates(subset=[USER_COL, ITEM_COL])
+    test = test.drop_duplicates(subset=[USER_COL, ITEM_COL])
     # convert to numpy arrays
     train = train.values.astype(int)
     validation = validation.values.astype(int)
+    test = test.values.astype(int)
     # remove rows with negative values from validation = users or items that don't exist in train set
     validation = validation[validation.min(axis=1)>=0,:]
-    return train, validation
+    return train, validation, test
 
 def user_item_dic_preprocess(data: np.array) -> dict:
     """
