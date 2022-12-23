@@ -97,6 +97,8 @@ def load_negative_samples(  user_items_dict,
             negative_samples = sample_negative_examples_by_popularity(user_items_dict, items_list, popularity_dict)
         with open(file_name, 'wb') as f:
             pickle.dump(negative_samples, f)
+    finally:
+        return negative_samples
 
 def create_items_embeddings(items_list:list, alpha_item ,k:int)->dict:
     """
@@ -127,6 +129,21 @@ def create_users_embeddings(user_items_dict:dict, alpha_user, k:int)->dict:
     for user in user_items_dict:
         users_embeddings[user] = np.random.normal(0, alpha_user, k)
     return users_embeddings
+
+def create_embeddings(object_lst, alpha, k):
+    """
+    create latent space vectors.
+    Args:
+        object_lst: list of all objects.
+        alpha: standard deviation of the normal distribution for random init.
+        k: number of latent factors.
+    Returns:
+        embeddings: dictionary with object id as key and latent space vector as value.
+    """
+    embeddings = {}
+    for obj in object_lst:
+        embeddings[obj] = np.random.normal(0, alpha, k)
+    return embeddings
 
 def sigmoid(x):
     return 1 / (1 + math.exp(-x))
