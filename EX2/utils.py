@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import math
 from tqdm import tqdm
+import pickle
 
 def create_user_items_dict(df: pd.DataFrame) -> dict:
     """
@@ -67,6 +68,35 @@ def create_item_popularity_dict(train_set:pd.DataFrame)->dict:
     popularity_df['probability'] = popularity_df['counts'] / popularity_df['counts'].sum()
     item_probability_dict = dict(zip(popularity_df['ItemID'], popularity_df['probability']))
     return item_probability_dict
+
+def load_negative_samples(  user_items_dict,
+                            items_list,
+                            dataset_type: str, sample_strategy: str,
+                            popularity_dict=None)-> dict:
+    """
+    Loads data from pickle file.
+    Args:
+        user_items_dict: {user_id: list of positive items}
+        items_list: list of all item ids
+        dataset_type: 'train' or 'validation'
+        sample_strategy: 'random' or 'popularity'
+        popularity_dic: {item_id: popularity}
+    Returns:
+        dictionary: {user_id: list of items}
+    """
+    file_name = f'data/negative_samples/{dataset_type}_{sample_strategy}.pkl'
+    try:
+        with open(file_name, 'rb') as f:
+            negative_samples = pickle.load(f)
+    except:
+        if sample_strategy == 'random':
+            print(f'creating {dataset_type} negative samples randomly')
+            negative_samples = sample_negative_examples_randomly(user_items_dict, items_list)
+        elif sample_strategy == 'popularity':
+            print(f'creating {dataset_type} negative samples by popularity')
+            negative_samples = sample_negative_examples_by_popularity(user_items_dict, items_list, popularity_dict)
+        with open(file_name, 'wb') as f:
+            pickle.dump(negative_samples, f)
 
 def create_items_embeddings(items_list:list, alpha_item ,k:int)->dict:
     """
