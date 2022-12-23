@@ -19,6 +19,7 @@ def create_user_items_dict(df: pd.DataFrame) -> dict:
         user_items_dict[user].append(item)
     return user_items_dict
 
+
 def sample_negative_examples_randomly(user_items_dict:dict, items_list:list)->list:
     """
     Samples negative examples randomly. for each user, samples the same number of negative examples as the number of positive examples.
@@ -34,6 +35,7 @@ def sample_negative_examples_randomly(user_items_dict:dict, items_list:list)->li
         number_of_samples = min(len(relevant_samples), len(user_items_dict[user]))
         negative_samples[user] = list(np.random.choice(relevant_samples, number_of_samples, replace=False))
     return negative_samples
+
 
 def sample_negative_examples_by_popularity(user_items_dict:dict, items_list:list, item_probability_dict:dict)->list:
     """
@@ -56,6 +58,7 @@ def sample_negative_examples_by_popularity(user_items_dict:dict, items_list:list
         negative_samples[user] = list(np.random.choice(relevant_samples, number_of_samples, replace=False, p=probabilities))
     return negative_samples
 
+
 def create_item_popularity_dict(train_set:pd.DataFrame)->dict:
     """
     Creates a dictionary with item id as key and popularity of item as value.
@@ -68,6 +71,7 @@ def create_item_popularity_dict(train_set:pd.DataFrame)->dict:
     popularity_df['probability'] = popularity_df['counts'] / popularity_df['counts'].sum()
     item_probability_dict = dict(zip(popularity_df['ItemID'], popularity_df['probability']))
     return item_probability_dict
+
 
 def load_negative_samples(  user_items_dict,
                             items_list,
@@ -100,35 +104,6 @@ def load_negative_samples(  user_items_dict,
     finally:
         return negative_samples
 
-def create_items_embeddings(items_list:list, alpha_item ,k:int)->dict:
-    """
-    create items latent space vectors.
-    Args:
-        items_list: list of all items.
-        alpha_item: standard deviation of the normal distribution for random init.
-        k: number of latent factors.
-    Returns:
-        items_embeddings: dictionary with item id as key and latent space vector as value.
-    """
-    items_embeddings = {}
-    for item in items_list:
-        items_embeddings[item] = np.random.normal(0, alpha_item, k)
-    return items_embeddings
-
-def create_users_embeddings(user_items_dict:dict, alpha_user, k:int)->dict:
-    """
-    create users latent space vectors.
-    Args:
-        user_items_dict: dictionary with user id as key and list of items as value.
-        alpha_user: standard deviation of the normal distribution for random init.
-        k: number of latent factors.
-    Returns:
-        users_embeddings: dictionary with user id as key and latent space vector as value.
-    """
-    users_embeddings = {}
-    for user in user_items_dict:
-        users_embeddings[user] = np.random.normal(0, alpha_user, k)
-    return users_embeddings
 
 def create_embeddings(object_lst, alpha, k):
     """
@@ -145,52 +120,66 @@ def create_embeddings(object_lst, alpha, k):
         embeddings[obj] = np.random.normal(0, alpha, k)
     return embeddings
 
+
+def create_dataset(user_negative_samples, dataset):
+    """
+    Creates a dataframe with all positive and negative examples. Used for training.
+    Args:
+        user_negative_samples: {user_id: list of negative items}
+        dataset: dataframe with columns [userID,itemID] for positive examples
+    Returns:
+        dataframe with columns [userID,itemID,Rating] where Rating is 1 for positive examples and 0 for negative examples
+    """
+    df = dataset.copy()
+    for user in tqdm(user_negative_samples.keys()):
+        neg_items = user_negative_samples[user]
+        df = pd.concat([df, pd.DataFrame({'UserID':user, 'ItemID':neg_items, 'Rating':0})])
+    df['Rating'] = df['Rating'].fillna(1).astype(int)
+    return df
+    
+
 def sigmoid(x):
     return 1 / (1 + math.exp(-x))
 
-def training_loop(user_items_dict:dict,
-                    items_list:list,
-                    alpha_user:float,
-                    alpha_item:float,
-                    k:int,
-                    lr:float,
-                    epochs:int,
-                    user_negative_samples_by_popularity:dict,
-                    user_negative_samples_randomly:dict,
-                    sample_negative_by_popularity:bool=False)->tuple:
+
+def training_loop(  train_df: pd.DataFrame,
+                    user_items_dict_validation: dict,
+                    negative_samples_validation: dict,
+                    user_list: list,
+                    items_list: list,
+                    alpha_item: float,
+                    alpha_user: float,
+                    epochs: int,
+                    k: int,
+                    lr: float,
+                    ) -> tuple:
     """
-    training loop for SGD.
+    Training loop for SGD.
     Args:
-        user_items_dict: dictionary with user id as key and list of items as value.
-        items_list: list of all items.
-        alpha_user: standard deviation of the normal distribution for random init.
-        alpha_item: standard deviation of the normal distribution for random init.
+        train_df: dataframe with columns [userID,itemID,rating]
+        user_items_dict_validation: {user_id: list of positive items} for validation set
+        negative_samples_validation: {user_id: list of negative items} for validation set
+        user_list: list of all user ids
+        items_list: list of all item ids
+        alpha_item: standard deviation of the normal distribution for random init of item embeddings.
+        alpha_user: standard deviation of the normal distribution for random init of user embeddings.
+        epochs: number of epochs.
         k: number of latent factors.
         lr: learning rate.
-        epochs: number of epochs.
-        user_negative_samples_by_popularity: dictionary with user id as key and list of negative items as value.
-        user_negative_samples_randomly: dictionary with user id as key and list of negative items as value.
-        sample_negative_by_popularity: if True, samples negative examples by popularity. if False, samples negative examples randomly.
+    Returns:
+        items_embeddings: {item_id: latent space vector}
+        users_embeddings: {user_id: latent space vector}
     """
-    items_embeddings = create_items_embeddings(items_list, alpha_item, k)
-    users_embeddings = create_users_embeddings(user_items_dict, alpha_user, k)
-
-    for epoch in tqdm(range(epochs)):
-        for user in tqdm(user_items_dict):
-            if sample_negative_by_popularity:
-                negative_item = user_negative_samples_by_popularity(user)
-            else:
-                negative_item = user_negative_samples_randomly(user)
-            for item in user_items_dict[user]:
-                prediction = sigmoid(np.dot(users_embeddings[user], items_embeddings[item]))
-                error = 1 - prediction
-                users_embeddings[user] += lr * error * items_embeddings[item] - alpha_user * users_embeddings[user]
-                items_embeddings[item] += lr * error * users_embeddings[user] - alpha_item * items_embeddings[item]
-
-            for item in negative_item:
-                prediction = sigmoid(-1*(users_embeddings[user]).T.dot(items_embeddings[item]))
-                error = 0 - prediction
-                users_embeddings[user] += lr * error * items_embeddings[item] - alpha_user * users_embeddings[user]
-                items_embeddings[item] += lr * error * users_embeddings[user] - alpha_item * items_embeddings[item]
-            
+    items_embeddings = create_embeddings(items_list, alpha_item, k)
+    users_embeddings = create_embeddings(user_list, alpha_user, k)
+    train = train_df.values
+    for e in range(epochs):
+        np.random.shuffle(train)
+        for user, item, rating in tqdm(train, desc=f'Epoch {e+1}'):
+            prediction = sigmoid(np.dot(users_embeddings[user], items_embeddings[item]))
+            error = rating - prediction
+            users_embeddings[user] += lr * error * items_embeddings[item] - alpha_user * users_embeddings[user]
+            items_embeddings[item] += lr * error * users_embeddings[user] - alpha_item * items_embeddings[item]
+    
+    # TODO: add measures calculation on validation set
     return users_embeddings, items_embeddings
