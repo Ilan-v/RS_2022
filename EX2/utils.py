@@ -183,3 +183,39 @@ def training_loop(  train_df: pd.DataFrame,
     
     # TODO: add measures calculation on validation set
     return users_embeddings, items_embeddings
+
+def MPR_calculation(positive_samples:dict, negative_samples:dict, users_embeddings:dict, items_embeddings:dict)->float:
+    MPR = 0
+    for user in tqdm(positive_samples.keys(), desc='MPR calculation'):
+        user_mpr=0
+        for item in positive_samples[user]:
+            positive_score = np.dot(users_embeddings[user], items_embeddings[item])
+            negative_scores = [np.dot(users_embeddings[user], items_embeddings[item]) for item in negative_samples[user]]
+            #add positive score to the list of negative scores, sort the list and find the index of the positive score
+            scores = np.sort(np.append(negative_scores, positive_score))
+            index = np.where(scores == positive_score)[0][0]
+            user_mpr+=index+1/len(scores)
+        MPR+=user_mpr/len(positive_samples[user])
+    MPR = MPR/len(positive_samples.keys())
+    return MPR / len(positive_samples)
+
+def Hit_Rate_at_k(positive_samples:dict, negative_samples:dict, users_embeddings:dict, items_embeddings:dict, k):
+    hit_rate = 0
+    for user in tqdm(positive_samples.keys()):
+        user_hit_rate=0
+        items_score=[]
+        for item in positive_samples[user]:
+            positive_score = np.dot(users_embeddings[user], items_embeddings[item])
+            items_score.append((positive_score,1))
+        
+        negative_scores = [np.dot(users_embeddings[user], items_embeddings[item]) for item in negative_samples[user]]
+        negative_scores = [(score,0) for score in negative_scores]
+        items_score.extend(negative_scores)
+        items_score = sorted(items_score, key=lambda x: x[0], reverse=True)
+        items_score = items_score[:k]
+        user_hit_rate = sum([x[1] for x in items_score])
+        user_hit_rate = user_hit_rate/k
+        hit_rate+=user_hit_rate
+    hit_rate = hit_rate/len(positive_samples.keys())
+    return hit_rate
+
