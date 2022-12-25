@@ -20,30 +20,41 @@ def create_user_items_dict(df: pd.DataFrame) -> dict:
     return user_items_dict
 
 
-def sample_negative_examples_randomly(user_items_dict:dict, items_list:list)->list:
+def sample_negative_examples_randomly(user_items_dict:dict,
+                                      items_list:list,
+                                      dataset_type: str)->list:
     """
     Samples negative examples randomly. for each user, samples the same number of negative examples as the number of positive examples.
     Args:
         user_items_dict: dictionary with user id as key and list of items as value.
         items_list: list of all items.
+        dataset_type: 'train' or 'validation'
     Returns:
         negative_samples: dictionary with user id as key and list of negative items as value.
     """
     negative_samples={}
     for user in tqdm(user_items_dict):
         relevant_samples = [x for x in items_list if x not in set(user_items_dict[user])]
-        number_of_samples = min(len(relevant_samples), len(user_items_dict[user]))
+        if dataset_type == 'validation':
+            number_of_samples = 97
+        elif dataset_type == 'train':
+            number_of_samples = min(len(relevant_samples), len(user_items_dict[user]))
+
         negative_samples[user] = list(np.random.choice(relevant_samples, number_of_samples, replace=False))
     return negative_samples
 
 
-def sample_negative_examples_by_popularity(user_items_dict:dict, items_list:list, item_probability_dict:dict)->list:
+def sample_negative_examples_by_popularity( user_items_dict:dict,
+                                            items_list:list,
+                                            item_probability_dict:dict,
+                                            dataset_type: str)->list:
     """
     Samples negative examples by popularity. for each user, samples the same number of negative examples as the number of positive examples.
     Args:
         user_items_dict: dictionary with user id as key and list of items as value.
         items_list: list of all items.
         item_probability_dict: dictionary with item id as key and popularity of item as value.
+        dataset_type: 'train' or 'validation'
     Returns:
         negative_samples: dictionary with user id as key and list of negative items as value.
     """
@@ -54,7 +65,12 @@ def sample_negative_examples_by_popularity(user_items_dict:dict, items_list:list
         # calculate the probability of each item according to its popularity
         probabilities = [item_probability_dict[x] for x in relevant_samples]
         probabilities = np.exp(probabilities) / np.sum(np.exp(probabilities))
-        number_of_samples = min(len(relevant_samples), len(user_items_dict[user]))
+        # number of negative samples to sample
+        if dataset_type == 'validation':
+            number_of_samples = 97
+        elif dataset_type == 'train':
+            number_of_samples = min(len(relevant_samples), len(user_items_dict[user]))
+        # sample negative examples
         negative_samples[user] = list(np.random.choice(relevant_samples, number_of_samples, replace=False, p=probabilities))
     return negative_samples
 
@@ -95,10 +111,10 @@ def load_negative_samples(  user_items_dict,
     except:
         if sample_strategy == 'random':
             print(f'creating {dataset_type} negative samples randomly')
-            negative_samples = sample_negative_examples_randomly(user_items_dict, items_list)
+            negative_samples = sample_negative_examples_randomly(user_items_dict, items_list,dataset_type=dataset_type)
         elif sample_strategy == 'popularity':
             print(f'creating {dataset_type} negative samples by popularity')
-            negative_samples = sample_negative_examples_by_popularity(user_items_dict, items_list, popularity_dict)
+            negative_samples = sample_negative_examples_by_popularity(user_items_dict, items_list, popularity_dict, dataset_type=dataset_type)
         with open(file_name, 'wb') as f:
             pickle.dump(negative_samples, f)
     finally:
@@ -200,6 +216,15 @@ def MPR_calculation(positive_samples:dict, negative_samples:dict, users_embeddin
     return MPR / len(positive_samples)
 
 def Hit_Rate_at_k(positive_samples:dict, negative_samples:dict, users_embeddings:dict, items_embeddings:dict, k):
+    """
+    Calculate average hitrate@k for a given set of positive and negative samples per user.
+    Args:
+        positive_samples (dict): dictionary of positive samples per user
+        negative_samples (dict): dictionary of negative samples per user
+        users_embeddings (dict): dictionary of user embeddings
+        items_embeddings (dict): dictionary of item embeddings
+        k (int): number of items to consider for hitrate calculation
+    """
     hit_rate = 0
     for user in tqdm(positive_samples.keys()):
         user_hit_rate=0
