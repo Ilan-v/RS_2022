@@ -189,15 +189,36 @@ def training_loop(  train_df: pd.DataFrame,
     items_embeddings = create_embeddings(items_list, alpha_item, k)
     users_embeddings = create_embeddings(user_list, alpha_user, k)
     train = train_df.values
+    # loss objects
+    loss_increase_counter = 0
+    loss_dic = {'train':[], 'validation':[]}
     for e in range(epochs):
+
         np.random.shuffle(train)
+        loss = 0
         for user, item, rating in tqdm(train, desc=f'Epoch {e+1}'):
             prediction = sigmoid(np.dot(users_embeddings[user], items_embeddings[item]))
             error = rating - prediction
-            users_embeddings[user] += lr * error * items_embeddings[item] - alpha_user * users_embeddings[user]
-            items_embeddings[item] += lr * error * users_embeddings[user] - alpha_item * items_embeddings[item]
-    
-    # TODO: add measures calculation on validation set
+            users_embeddings[user] += lr * (error * items_embeddings[item] - alpha_user * users_embeddings[user])
+            items_embeddings[item] += lr * (error * users_embeddings[user] - alpha_item * items_embeddings[item])
+            # calculate loss
+            loss += train_loss_func(prediction, rating, users_embeddings[user], items_embeddings[item], alpha_item, alpha_user)
+        # calculate validation loss
+        val_loss = validation_loss_func(user_items_dict_validation, negative_samples_validation, users_embeddings, items_embeddings, alpha_item, alpha_user)
+        epoch_train_loss = -loss/len(train)
+        loss_dic['train'].append(epoch_train_loss)
+        loss_dic['validation'].append(val_loss)
+        print(f'Epoch {e+1} train loss: {round(epoch_train_loss,3)} validation loss: {round(val_loss,3)}')
+
+        # check for early stopping
+        if e!=0:
+            if loss_dic['validation'][-1] > loss_dic['validation'][-2]:
+                loss_increase_counter += 1
+                if loss_increase_counter == 2:
+                    print('Early stopping')
+                    break
+            else: 
+                loss_increase_counter = 0
     return users_embeddings, items_embeddings
 
 def MPR_calculation(positive_samples:dict, negative_samples:dict, users_embeddings:dict, items_embeddings:dict)->float:
@@ -244,3 +265,81 @@ def Hit_Rate_at_k(positive_samples:dict, negative_samples:dict, users_embeddings
     hit_rate = hit_rate/len(positive_samples.keys())
     return hit_rate
 
+def validation_regularization(user_embs, item_embs, alpha_item, alpha_user):
+    """
+    Calculate regularization loss for user and item embeddings.
+    Args:
+        user_embs (dict): dictionary of user embeddings
+        item_embs (dict): dictionary of item embeddings
+        reg_lambda (float): regularization parameter
+    """
+    user_reg = 0
+    item_reg = 0
+    for user in user_embs:
+        user_reg += np.linalg.norm(user_embs[user])
+    for item in item_embs:
+        item_reg += np.sum(item_embs[item]**2)
+    return (alpha_user/2) * user_reg + (alpha_item/2) * item_reg
+
+def validation_log_loss(positive_samples: dict,
+                        negative_samples: dict,
+                        user_embeddings: dict,
+                        item_embeddings: dict,
+                        )-> float:
+    """
+    Calculate log loss for a given set of positive and negative samples per user.
+    Args:
+        positive_samples (dict): dictionary of positive samples per user
+        negative_samples (dict): dictionary of negative samples per user
+        user_vectors (dict): dictionary of user vectors
+        item_vectors (dict): dictionary of item vectors
+    """
+    loss = 0
+    for user in tqdm(positive_samples):
+        # get user vector
+        user_vector = user_embeddings[user]
+        # get positive and negative items vectors 
+        pos_item_vectors = [item_embeddings[x] for x in positive_samples[user]]
+        neg_item_vectors = [item_embeddings[x] for x in negative_samples[user]]
+        # convert lists of arrays to matrices
+        pos_items_matrix = np.vstack(pos_item_vectors)
+        neg_items_matrix = np.vstack(neg_item_vectors)
+
+        # calculate loss for positive items
+        pos_loss = np.log(np.array([sigmoid(x) for x in np.dot(user_vector, pos_items_matrix.T)]))
+        # calculate loss for negative item
+        neg_loss = np.log(1 - np.array([sigmoid(x) for x in np.dot(user_vector, pos_items_matrix.T)]))
+        # add up losses
+        loss += np.sum(pos_loss)/len(pos_loss) + np.sum(neg_loss)/len(neg_loss)
+    
+    log_loss = -loss/(len(positive_samples))
+    return log_loss 
+
+def validation_loss_func(  positive_samples,
+                            negative_samples,
+                            user_embeddings,
+                            item_embeddings,
+                            alpha_user,
+                            alpha_item)-> float:
+    log_loss = validation_log_loss(positive_samples, negative_samples, user_embeddings, item_embeddings)
+    reg = validation_regularization(user_embeddings, item_embeddings, alpha_user, alpha_item)
+    return log_loss + reg
+
+def train_loss_func(prediction: float,
+                    rating:int,
+                    user_embedding:np.ndarray,
+                    item_embedding:np.ndarray,
+                    alpha_item:float,
+                    alpha_user:float
+                    )-> float:
+    """
+    Calculate loss for a given prediction, rating, user embedding and item embedding.
+    Args:
+        prediction (float): prediction for a given user-item pair
+        rating (int): actual rating for a given user-item pair
+        user_embedding (np.ndarray): user embedding
+        item_embedding (np.ndarray): item embedding
+    """
+    log_loss =  rating * np.log(prediction) + (1 - rating) * np.log(1 -prediction)
+    regularization = (alpha_user/2) * np.linalg.norm(user_embedding) + (alpha_item/2) * np.linalg.norm(item_embedding)
+    return log_loss + regularization 
