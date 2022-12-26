@@ -121,19 +121,19 @@ def load_negative_samples(  user_items_dict,
         return negative_samples
 
 
-def create_embeddings(object_lst, alpha, k):
+def create_embeddings(object_lst, std, k):
     """
     create latent space vectors.
     Args:
         object_lst: list of all objects.
-        alpha: standard deviation of the normal distribution for random init.
+        std: standard deviation of the normal distribution for random init.
         k: number of latent factors.
     Returns:
         embeddings: dictionary with object id as key and latent space vector as value.
     """
     embeddings = {}
     for obj in object_lst:
-        embeddings[obj] = np.random.normal(0, alpha, k)
+        embeddings[obj] = np.random.normal(0, std, k)
     return embeddings
 
 
@@ -155,7 +155,10 @@ def create_dataset(user_negative_samples, dataset):
     
 
 def sigmoid(x):
-    return 1 / (1 + math.exp(-x))
+    try:
+        return 1 / (1 + math.exp(-x))
+    except OverflowError:
+        return 1 if x>0 else 0
 
 
 def training_loop(  train_df: pd.DataFrame,
@@ -165,6 +168,8 @@ def training_loop(  train_df: pd.DataFrame,
                     items_list: list,
                     alpha_item: float,
                     alpha_user: float,
+                    item_init_noise: float,
+                    user_init_noise: float,
                     epochs: int,
                     k: int,
                     lr: float,
@@ -186,8 +191,8 @@ def training_loop(  train_df: pd.DataFrame,
         items_embeddings: {item_id: latent space vector}
         users_embeddings: {user_id: latent space vector}
     """
-    items_embeddings = create_embeddings(items_list, alpha_item, k)
-    users_embeddings = create_embeddings(user_list, alpha_user, k)
+    items_embeddings = create_embeddings(items_list, item_init_noise, k)
+    users_embeddings = create_embeddings(user_list, user_init_noise, k)
     train = train_df.values
     # loss objects
     loss_increase_counter = 0
@@ -216,7 +221,7 @@ def training_loop(  train_df: pd.DataFrame,
                 loss_increase_counter += 1
                 if loss_increase_counter == 2:
                     print('Early stopping')
-                    break
+                    # break
             else: 
                 loss_increase_counter = 0
     return users_embeddings, items_embeddings
@@ -278,8 +283,8 @@ def validation_regularization(user_embs, item_embs, alpha_item, alpha_user):
     for user in user_embs:
         user_reg += np.linalg.norm(user_embs[user])
     for item in item_embs:
-        item_reg += np.sum(item_embs[item]**2)
-    return (alpha_user/2) * user_reg + (alpha_item/2) * item_reg
+        item_reg +=  np.linalg.norm(item_embs[item])
+    return ((alpha_user/2) * user_reg + (alpha_item/2) * item_reg)/len(user_embs)
 
 def validation_log_loss(positive_samples: dict,
                         negative_samples: dict,
@@ -308,14 +313,14 @@ def validation_log_loss(positive_samples: dict,
         # calculate loss for positive items
         pos_loss = np.log(np.array([sigmoid(x) for x in np.dot(user_vector, pos_items_matrix.T)]))
         # calculate loss for negative item
-        neg_loss = np.log(1 - np.array([sigmoid(x) for x in np.dot(user_vector, pos_items_matrix.T)]))
+        neg_loss = np.log(1 - np.array([sigmoid(x) for x in np.dot(user_vector, neg_items_matrix.T)]))
         # add up losses
         loss += np.sum(pos_loss)/len(pos_loss) + np.sum(neg_loss)/len(neg_loss)
     
     log_loss = -loss/(len(positive_samples))
     return log_loss 
 
-def validation_loss_func(  positive_samples,
+def validation_loss_func(   positive_samples,
                             negative_samples,
                             user_embeddings,
                             item_embeddings,
@@ -340,6 +345,10 @@ def train_loss_func(prediction: float,
         user_embedding (np.ndarray): user embedding
         item_embedding (np.ndarray): item embedding
     """
-    log_loss =  rating * np.log(prediction) + (1 - rating) * np.log(1 -prediction)
-    regularization = (alpha_user/2) * np.linalg.norm(user_embedding) + (alpha_item/2) * np.linalg.norm(item_embedding)
-    return log_loss + regularization 
+    try:
+        # epsilon = 1e-15
+        epsilon = 0
+        log_loss =  rating * np.log(prediction + epsilon) + (1 - rating) * np.log(1 -prediction + epsilon)
+        regularization = (alpha_user/2) * np.linalg.norm(user_embedding) + (alpha_item/2) * np.linalg.norm(item_embedding)
+    finally:
+        return log_loss + regularization 
