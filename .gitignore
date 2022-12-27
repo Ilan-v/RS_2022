@@ -4,3 +4,4 @@ EX1/.vscode/
 *.pyc
 *.code-workspace
 EX2/data/
+.idea/
