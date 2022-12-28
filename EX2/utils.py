@@ -312,7 +312,7 @@ def training_loop(  train_df: pd.DataFrame,
                 loss_increase_counter += 1
                 if loss_increase_counter == 2:
                     print('Early stopping')
-                    # break
+                    break
             else: 
                 loss_increase_counter = 0
     return users_embeddings, items_embeddings
@@ -347,7 +347,7 @@ def Hit_Rate_at_k(positive_samples:dict, negative_samples:dict, users_embeddings
         k (int): number of items to consider for hitrate calculation
     """
     hit_rate = 0
-    for user in tqdm(positive_samples.keys()):
+    for user in tqdm(positive_samples.keys(),desc=f'Hit Rate @{k} calculation'):
         user_hit_rate=0
         items_score=[]
         for item in positive_samples[user]:
